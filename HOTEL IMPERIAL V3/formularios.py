@@ -1,6 +1,8 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox,simpledialog
 from logic import validar_login
+from logic import gestionar_turno
+
 
 # --- 1. VENTANA DE LOGIN (Negro y Dorado) ---
 class VentanaLogin:
@@ -55,18 +57,32 @@ class VentanaLogin:
             entry.config(fg="gray")
             if ocultar: entry.config(show="")
 
+
     def intentar_entrar(self):
         u = self.txt_usuario.get()
         c = self.txt_clave.get()
         
-        # Limpieza de placeholders para la lógica
-        user_final = "" if u == "Usuario" else u
-        pass_final = "" if c == "Contraseña" else c
+        # Limpiar placeholders
+        user_f = "" if u == "Usuario" else u
+        pass_f = "" if c == "Contraseña" else c
 
-        datos_usuario = validar_login(user_final, pass_final)
+        datos_usuario = validar_login(user_f, pass_f)
         
         if datos_usuario:
-            messagebox.showinfo("Éxito", f"Acceso concedido: {datos_usuario[2]}\n¡Bienvenido al sistema!")
-            # Por ahora no abrimos ninguna otra ventana, solo confirmamos el acceso
+            id_usuario = datos_usuario[0]
+            
+            # --- PREGUNTAR POR LA BASE DE CAJA ---
+            # Si ya hay un turno abierto, esto no se pedirá (o la lógica lo ignorará)
+            base = simpledialog.askfloat("Base de Caja", "¿Con cuánto dinero inicia el turno?", 
+                                         initialvalue=0, minvalue=0)
+            
+            if base is not None: # Si el usuario no dio en 'Cancelar'
+                id_turno = gestionar_turno(id_usuario, base)
+                messagebox.showinfo("Éxito", f"Bienvenido\nTurno ID: {id_turno}\nBase: ${base}")
+            else:
+                messagebox.showwarning("Cancelado", "Debe ingresar una base para iniciar.")
         else:
             messagebox.showerror("Error", "Usuario o contraseña incorrectos")
+
+       
+            

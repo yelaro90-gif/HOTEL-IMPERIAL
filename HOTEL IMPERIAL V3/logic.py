@@ -34,3 +34,21 @@ def validar_login(usuario, clave):
     if resultado and len(resultado) > 0:
         return resultado[0]  # Devolvemos la primera fila encontrada
     return None
+def gestionar_turno(id_usuario, base_inicial=0):
+    # 1. Buscar si ya hay un turno ABIERTO para este usuario
+    sql_buscar = "SELECT id_turno FROM turnos WHERE id_usuario = %s AND estado = 'ABIERTO'"
+    resultado = ejecutar_query(sql_buscar, (id_usuario,), fetch=True)
+    
+    if resultado:
+        return resultado[0][0] # Retorna el ID si ya existe uno abierto
+    
+    # 2. Si no hay, crear uno nuevo con la base de caja
+    sql_insertar = "INSERT INTO turnos (id_usuario, base_caja) VALUES (%s, %s)"
+    parametros = (id_usuario, base_inicial)
+    
+    # Usamos una pequeña trampa para obtener el ID recién creado
+    ejecutar_query(sql_insertar, parametros)
+    
+    # Buscamos el ID que acabamos de insertar
+    res = ejecutar_query("SELECT MAX(id_turno) FROM turnos WHERE id_usuario = %s", (id_usuario,), fetch=True)
+    return res[0][0]
