@@ -67,22 +67,62 @@ class VentanaLogin:
         pass_f = "" if c == "Contraseña" else c
 
         datos_usuario = validar_login(user_f, pass_f)
-        
         if datos_usuario:
             id_usuario = datos_usuario[0]
+            base = simpledialog.askfloat("Caja", "Base inicial:", initialvalue=0)
             
-            # --- PREGUNTAR POR LA BASE DE CAJA ---
-            # Si ya hay un turno abierto, esto no se pedirá (o la lógica lo ignorará)
-            base = simpledialog.askfloat("Base de Caja", "¿Con cuánto dinero inicia el turno?", 
-                                         initialvalue=0, minvalue=0)
-            
-            if base is not None: # Si el usuario no dio en 'Cancelar'
+            if base is not None:
                 id_turno = gestionar_turno(id_usuario, base)
-                messagebox.showinfo("Éxito", f"Bienvenido\nTurno ID: {id_turno}\nBase: ${base}")
+                sesion = {"id_usuario": id_usuario, "nombre": datos_usuario[2], "id_turno": id_turno}
+                
+
+                # 3. Ocultamos la de login (o la destruimos)
+                self.root.withdraw()
+                # Creamos la principal como una ventana nueva
+                nueva_ventana = tk.Toplevel() 
+                VentanaPrincipal(nueva_ventana, sesion)
+
             else:
                 messagebox.showwarning("Cancelado", "Debe ingresar una base para iniciar.")
         else:
             messagebox.showerror("Error", "Usuario o contraseña incorrectos")
 
-       
-            
+
+# --- 3. VENTANA PRINCIPAL (Centro de Mando) ---
+class VentanaPrincipal:
+    def __init__(self, root, sesion):
+        self.root = root
+        self.sesion = sesion # Aquí vive el id_turno para usarlo después
+        self.root.title("Hotel Imperial - Menú Principal")
+        self.root.geometry("800x500")
+        self.root.configure(bg="black")
+
+        # Barra de estado superior (Dorada)
+        self.barra_estado = tk.Frame(self.root, bg="#D4AF37", height=30)
+        self.barra_estado.pack(fill="x")
+        
+        info = f"USUARIO: {self.sesion['nombre']}  |  TURNO ACTIVO: {self.sesion['id_turno']}"
+        tk.Label(self.barra_estado, text=info, bg="#D4AF37", fg="black", 
+                 font=("Arial", 9, "bold")).pack(side="left", padx=20)
+
+        # Contenedor de botones
+        self.menu_frame = tk.Frame(self.root, bg="black")
+        self.menu_frame.place(relx=0.5, rely=0.5, anchor="center")
+
+        tk.Label(self.menu_frame, text="PANEL DE CONTROL", bg="black", fg="#D4AF37", 
+                 font=("Garamond", 24, "bold")).pack(pady=30)
+        self.root.protocol("WM_DELETE_WINDOW", self.root.quit)
+        # Botones elegantes
+        btn_estilo = {"bg": "#D4AF37", "fg": "black", "font": ("Arial", 11, "bold"), 
+                      "width": 30, "bd": 0, "cursor": "hand2", "pady": 10}
+
+        tk.Button(self.menu_frame, text="GESTIÓN DE RESERVAS / FOLIOS", **btn_estilo,
+                  command=self.abrir_reservas).pack(pady=10)
+        
+        tk.Button(self.menu_frame, text="CIERRE DE CAJA", **btn_estilo).pack(pady=10)
+
+    def abrir_reservas(self):
+        # Aquí es donde el id_turno "viaja" al siguiente módulo
+        id_turno_actual = self.sesion['id_turno']
+        messagebox.showinfo("Módulo Reservas", f"Abriendo con el Turno: {id_turno_actual}")
+        # En el siguiente paso crearemos la clase FormularioReservas(self.root, id_turno_actual)
