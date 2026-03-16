@@ -1,7 +1,10 @@
 import tkinter as tk
 from tkinter import messagebox,simpledialog
+from tkinter import ttk # Necesario para la tabla (Treeview)
 from logic import validar_login
 from logic import gestionar_turno
+from logic import obtener_folios_db
+from logic import crear_folio_db
 
 
 # --- 1. VENTANA DE LOGIN (Negro y Dorado) ---
@@ -121,8 +124,77 @@ class VentanaPrincipal:
         
         tk.Button(self.menu_frame, text="CIERRE DE CAJA", **btn_estilo).pack(pady=10)
 
-    def abrir_reservas(self):
-        # Aquí es donde el id_turno "viaja" al siguiente módulo
-        id_turno_actual = self.sesion['id_turno']
-        messagebox.showinfo("Módulo Reservas", f"Abriendo con el Turno: {id_turno_actual}")
-        # En el siguiente paso crearemos la clase FormularioReservas(self.root, id_turno_actual)
+    def abrir_reservas(self):        
+        # Creamos la ventana de reservas y le pasamos el ID del turno de la sesión
+        ventana_res = tk.Toplevel(self.root)
+        VentanaReservas(ventana_res, self.sesion['id_turno'])
+
+
+class VentanaReservas:
+    def __init__(self, root, id_turno):
+        self.root = root
+        self.id_turno = id_turno
+        self.root.title("Gestión de Folios - Hotel Imperial")
+        self.root.geometry("900x600")
+        self.root.configure(bg="black")
+
+        # --- FORMULARIO SUPERIOR ---
+        frame_form = tk.Frame(self.root, bg="black")
+        frame_form.pack(pady=20)
+
+        # Nombre con texto interno
+        self.ent_nombre = tk.Entry(frame_form, bg="#1a1a1a", fg="gray", insertbackground="#D4AF37",
+                                   highlightthickness=1, highlightbackground="#D4AF37", font=("Arial", 12), width=30)
+        self.ent_nombre.insert(0, "Nombre del Huésped")
+        self.ent_nombre.pack(side="left", padx=10)
+
+        # ID con texto interno
+        self.ent_id = tk.Entry(frame_form, bg="#1a1a1a", fg="gray", insertbackground="#D4AF37",
+                               highlightthickness=1, highlightbackground="#D4AF37", font=("Arial", 12), width=20)
+        self.ent_id.insert(0, "Identificación")
+        self.ent_id.pack(side="left", padx=10)
+
+        # Botón Guardar
+        btn_guardar = tk.Button(frame_form, text="ABRIR FOLIO", bg="#D4AF37", fg="black", 
+                                font=("Arial", 10, "bold"), command=self.guardar_folio)
+        btn_guardar.pack(side="left", padx=10)
+
+        # --- TABLA DE FOLIOS (Treeview) ---
+        self.crear_tabla()
+        self.cargar_datos()
+
+    def crear_tabla(self):
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Treeview", background="#1a1a1a", foreground="white", fieldbackground="#1a1a1a", rowheight=25)
+        style.map("Treeview", background=[('selected', '#D4AF37')], foreground=[('selected', 'black')])
+
+        self.tabla = ttk.Treeview(self.root, columns=("ID", "Nombre", "ID Cliente", "Estado", "Fecha"), show='headings')
+        self.tabla.heading("ID", text="ID")
+        self.tabla.heading("Nombre", text="Huésped")
+        self.tabla.heading("ID Cliente", text="Identificación")
+        self.tabla.heading("Estado", text="Estado")
+        self.tabla.heading("Fecha", text="Fecha Apertura")
+        
+        self.tabla.pack(pady=20, padx=20, fill="both", expand=True)
+
+    def cargar_datos(self):
+        # Limpiar tabla
+        for item in self.tabla.get_children():
+            self.tabla.delete(item)
+        # Traer de la DB
+        for fila in obtener_folios_db():
+            self.tabla.insert("", "end", values=fila)
+
+    def guardar_folio(self):
+        nom = self.ent_nombre.get()
+        ident = self.ent_id.get()
+        
+        if nom == "Nombre del Huésped" or ident == "Identificación":
+            messagebox.showwarning("Atención", "Complete los datos")
+            return
+
+        # Llamamos a la función de guardado que hicimos antes
+        if crear_folio_db(nom, ident, self.id_turno):
+            messagebox.showinfo("Éxito", "Folio creado")
+            self.cargar_datos() # Refresca la tabla automáticamente       

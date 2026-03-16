@@ -1,4 +1,5 @@
 from database import ejecutar_query
+from database import conectar
 
 def registrar_folio(nombre, identificacion):
     """
@@ -52,3 +53,35 @@ def gestionar_turno(id_usuario, base_inicial=0):
     # Buscamos el ID que acabamos de insertar
     res = ejecutar_query("SELECT MAX(id_turno) FROM turnos WHERE id_usuario = %s", (id_usuario,), fetch=True)
     return res[0][0]
+
+def crear_folio_db(nombre, identificacion, id_turno_apertura):
+    conexion = conectar()
+    if not conexion: return False
+    try:
+        cursor = conexion.cursor()
+        sql = """
+            INSERT INTO folios (nombre_responsable, identificacion, id_turno_apertura, estado)
+            VALUES (%s, %s, %s, 'ABIERTO')
+        """
+        cursor.execute(sql, (nombre, identificacion, id_turno_apertura))
+        conexion.commit()
+        return True
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
+    finally:
+        conexion.close()
+
+def obtener_folios_db():
+    conexion = conectar()
+    if not conexion: return []
+    try:
+        cursor = conexion.cursor()
+        # Traemos solo los folios ABIERTOS para la gestión diaria
+        cursor.execute("SELECT id_folio, nombre_responsable, identificacion, estado, fecha_apertura FROM folios WHERE estado = 'ABIERTO' ORDER BY id_folio DESC")
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"Error al obtener folios: {e}")
+        return []
+    finally:
+        conexion.close()
