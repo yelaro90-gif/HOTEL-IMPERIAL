@@ -1,6 +1,7 @@
 from database import ejecutar_query
 from database import conectar
 
+
 def registrar_folio(nombre, identificacion):
     """
     Toma el nombre e ID y los manda a guardar.
@@ -85,3 +86,18 @@ def obtener_folios_db():
         return []
     finally:
         conexion.close()
+def obtener_todas_habitaciones():
+    try:
+        # Asegúrate de que conectar_db esté importado o definido en logic.py
+        from database import conectar
+        conn = conectar()
+        cur = conn.cursor()
+        # Traemos el número y el estado de aseo de la tabla que acabas de llenar
+        cur.execute("SELECT nro_habitacion, estado_aseo FROM habitaciones ORDER BY nro_habitacion ASC")
+        datos = cur.fetchall()
+        cur.close()
+        conn.close()
+        return datos # Retorna una lista tipo [('101', 'LIMPIA'), ('102', 'SUCIA')...]
+    except Exception as e:
+        print(f"Error en logic: {e}")
+        return []
