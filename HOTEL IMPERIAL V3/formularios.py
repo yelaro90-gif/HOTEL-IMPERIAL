@@ -27,6 +27,7 @@ class PuertaHabitacion(ctk.CTkFrame):
             widget.bind("<Button-1>", lambda e: self.comando(self.num_hab))
 
 # --- 2. VENTANA LOGIN ---
+# --- 2. VENTANA LOGIN ---
 class VentanaLogin:
     def __init__(self, root):
         self.root = root
@@ -39,34 +40,68 @@ class VentanaLogin:
 
         tk.Label(self.frame, text="HOTEL IMPERIAL", bg="black", fg="#D4AF37", font=("Garamond", 18, "bold")).pack(pady=(0, 30))
         
-        self.txt_usuario = tk.Entry(self.frame, font=("Arial", 12), bg="#1a1a1a", fg="gray", insertbackground="#D4AF37", bd=0, highlightthickness=1, highlightbackground="#D4AF37")
+        # --- INPUT USUARIO ---
+        self.txt_usuario = tk.Entry(self.frame, font=("Arial", 12), bg="#1a1a1a", fg="gray", 
+                                    insertbackground="#D4AF37", bd=0, highlightthickness=1, highlightbackground="#D4AF37")
         self.txt_usuario.insert(0, "Usuario")
         self.txt_usuario.pack(fill="x", pady=10, ipady=7)
+        
+        # Eventos para limpiar el texto
+        self.txt_usuario.bind('<FocusIn>', lambda e: self.on_entry_click(self.txt_usuario, "Usuario"))
+        self.txt_usuario.bind('<FocusOut>', lambda e: self.on_focusout(self.txt_usuario, "Usuario"))
 
-        self.txt_clave = tk.Entry(self.frame, font=("Arial", 12), bg="#1a1a1a", fg="gray", insertbackground="#D4AF37", bd=0, highlightthickness=1, highlightbackground="#D4AF37")
+        # --- INPUT CLAVE ---
+        self.txt_clave = tk.Entry(self.frame, font=("Arial", 12), bg="#1a1a1a", fg="gray", 
+                                  insertbackground="#D4AF37", bd=0, highlightthickness=1, highlightbackground="#D4AF37")
         self.txt_clave.insert(0, "Contraseña")
         self.txt_clave.pack(fill="x", pady=10, ipady=7)
+        
+        # Eventos para limpiar el texto y ocultar la clave
+        self.txt_clave.bind('<FocusIn>', lambda e: self.on_entry_click(self.txt_clave, "Contraseña"))
+        self.txt_clave.bind('<FocusOut>', lambda e: self.on_focusout(self.txt_clave, "Contraseña"))
 
-        tk.Button(self.frame, text="ENTRAR", bg="#D4AF37", fg="black", font=("Arial", 10, "bold"), command=self.intentar_entrar).pack(fill="x", pady=30, ipady=10)
+        tk.Button(self.frame, text="ENTRAR", bg="#D4AF37", fg="black", font=("Arial", 10, "bold"), 
+                  cursor="hand2", command=self.intentar_entrar).pack(fill="x", pady=30, ipady=10)
+
+    # --- FUNCIONES PARA EL TEXTO DINÁMICO ---
+    def on_entry_click(self, entry, placeholder):
+        """Borra el texto cuando el usuario hace clic"""
+        if entry.get() == placeholder:
+            entry.delete(0, tk.END)
+            entry.insert(0, '')
+            entry.config(fg='white') # Cambia a blanco al escribir
+            if placeholder == "Contraseña":
+                entry.config(show="*") # Oculta los caracteres solo si es la clave
+
+    def on_focusout(self, entry, placeholder):
+        """Pone el texto de nuevo si el usuario deja el campo vacío"""
+        if entry.get() == '':
+            entry.insert(0, placeholder)
+            entry.config(fg='gray')
+            if placeholder == "Contraseña":
+                entry.config(show="") # Muestra la palabra "Contraseña" de nuevo
 
     def intentar_entrar(self):
+        # ... (Tu lógica de validación se mantiene igual) ...
         u = self.txt_usuario.get()
         c = self.txt_clave.get()
-        datos_usuario = logic.validar_login(u, c)
         
+        # Evitar que mande la palabra "Usuario" o "Contraseña" como datos reales
+        if u == "Usuario" or c == "Contraseña":
+            messagebox.showwarning("Atención", "Por favor ingrese sus credenciales")
+            return
+
+        datos_usuario = logic.validar_login(u, c)
         if datos_usuario:
             id_usuario = datos_usuario[0]
             base = simpledialog.askfloat("Caja", "Base inicial:", initialvalue=0)
             if base is not None:
                 id_turno = logic.gestionar_turno(id_usuario, base)
-                sesion = {"id_usuario": id_usuario, "nombre": datos_usuario[2], "id_turno": id_turno}
-                
-                self.root.destroy() # Cerramos login
-                app_mapa = VentanaPrincipal(sesion=sesion) # Lanzamos mapa
-                app_mapa.mainloop()
+                self.root.sesion_exitosa = {"id_usuario": id_usuario, "nombre": datos_usuario[2], "id_turno": id_turno}
+                self.root.withdraw() 
+                self.root.quit()
         else:
             messagebox.showerror("Error", "Datos incorrectos")
-
 # --- 3. VENTANA PRINCIPAL (EL MAPA) ---
 class VentanaPrincipal(ctk.CTk):
     def __init__(self, sesion=None):
