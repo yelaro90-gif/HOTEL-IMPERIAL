@@ -28,16 +28,42 @@ def registrar_folio(nombre, identificacion, id_turno_apertura, tipo="CONTADO"):
     finally:
         conexion.close()
 
+# --- AJUSTE EN CARGA DE FOLIOS (Para que solo salgan ABIERTOS) ---
 def cargar_folios_activos():
     conexion = conectar()
     if not conexion: return []
     try:
         cur = conexion.cursor()
+        # Filtro estricto: solo ABIERTO
         cur.execute("SELECT id_folio, nombre_responsable FROM folios WHERE estado = 'ABIERTO' ORDER BY id_folio DESC")
         return cur.fetchall()
     except Exception as e:
         print(f"Error al cargar folios: {e}")
         return []
+    finally:
+        conexion.close()
+
+# --- NUEVA FUNCIÓN: CERRAR FOLIO COMPLETO ---
+def cerrar_folio_y_salida(num_hab, id_folio):
+    """Libera la habitación y cierra el folio para que no aparezca más en listas."""
+    conexion = conectar()
+    if not conexion: return False
+    try:
+        cur = conexion.cursor()
+        
+        # 1. Liberar la habitación actual
+        cur.execute("UPDATE reservas SET estado = 'FINALIZADA' WHERE habitacion = %s AND estado = 'OCUPADA'", (num_hab,))
+        cur.execute("UPDATE habitaciones SET estado_aseo = 'LIMPIEZA' WHERE nro_habitacion = %s", (num_hab,))
+        
+        # 2. Cerrar el Folio (Ya no saldrá en los ComboBox)
+        cur.execute("UPDATE folios SET estado = 'CERRADO' WHERE id_folio = %s", (id_folio,))
+        
+        conexion.commit()
+        return True
+    except Exception as e:
+        print(f"Error al cerrar folio: {e}")
+        conexion.rollback()
+        return False
     finally:
         conexion.close()
 
@@ -178,6 +204,71 @@ def realizar_checkin_completo(datos):
         return True
     except Exception as e:
         print(f"Error en logic: {e}")
+        conexion.rollback()
+        return False
+    finally:
+        conexion.close()
+# --- FUNCIONES PARA CONSULTAR OCUPACIÓN ACTUAL ---
+
+def obtener_detalles_huesped_actual(num_hab):
+    conexion = conectar()
+    if not conexion: return None
+    try:
+        cur = conexion.cursor()
+        sql = """
+            SELECT r.nombre_huesped, r.identificacion, r.celular, r.procedencia, 
+                   r.fecha_entrada, r.fecha_salida, r.valor_reserva, r.forma_pago, r.estado,
+                   r.id_folio_vinculado, f.nombre_responsable
+            FROM reservas r
+            LEFT JOIN folios f ON r.id_folio_vinculado = f.id_folio
+            WHERE r.habitacion = %s AND r.estado IN ('OCUPADA', 'RESERVADA')
+            ORDER BY r.id_reserva DESC LIMIT 1
+        """
+        cur.execute(sql, (num_hab,))
+        res = cur.fetchone()
+        
+        if res:
+            return {
+                'nombre': res[0],
+                'identificacion': res[1],
+                'celular': res[2],
+                'procedencia': res[3],
+                'f_entrada': res[4],
+                'f_salida': res[5] if res[5] else "N/A",
+                'v_reserva': res[6], # <--- Este es tu TOTAL PROVISIONAL
+                'forma_pago': res[7],
+                'estado_reserva': res[8],
+                'id_folio': res[9],
+                'responsable_folio': res[10]
+            }
+        return None
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+    finally:
+        conexion.close()
+def liberar_habitacion(num_hab):
+    """
+    Finaliza la estancia (Check-out). 
+    Cambia el estado de la reserva a 'FINALIZADA' y la hab a 'LIMPIEZA' (o LIMPIA).
+    """
+    conexion = conectar()
+    if not conexion: return False
+    try:
+        cur = conexion.cursor()
+        
+        # 1. Finalizar la reserva activa
+        sql_res = "UPDATE reservas SET estado = 'FINALIZADA' WHERE habitacion = %s AND estado = 'OCUPADA'"
+        cur.execute(sql_res, (num_hab,))
+        
+        # 2. Poner la habitación en LIMPIEZA (siguiendo tu lógica de estados)
+        sql_hab = "UPDATE habitaciones SET estado_aseo = 'LIMPIEZA' WHERE nro_habitacion = %s"
+        cur.execute(sql_hab, (num_hab,))
+        
+        conexion.commit()
+        return True
+    except Exception as e:
+        print(f"Error al liberar habitación: {e}")
         conexion.rollback()
         return False
     finally:

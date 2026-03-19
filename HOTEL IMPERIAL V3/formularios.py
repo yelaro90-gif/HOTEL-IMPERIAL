@@ -397,50 +397,96 @@ class VentanaNuevaReserva(ctk.CTkToplevel):
 class VentanaDetalleHuesped(ctk.CTkToplevel):
     def __init__(self, master, num_hab):
         super().__init__(master)
-        self.title(f"Información Habitación {num_hab}")
-        self.geometry("500x400")
+        self.num_hab = num_hab
+        self.title(f"Detalle Ocupación - Hab {self.num_hab}")
+        self.geometry("550x680") # Altura reducida para mejor ajuste
         self.configure(fg_color="black")
-        self.grab_set() # Bloquea la ventana de atrás hasta cerrar esta
+        self.grab_set()
 
-        # Título dorado
-        ctk.CTkLabel(self, text=f"DETALLES DE OCUPACIÓN - HAB {num_hab}", 
-                     font=("Garamond", 18, "bold"), text_color="#D4AF37").pack(pady=20)
+        self.datos = logic.obtener_detalles_huesped_actual(num_hab)
 
-        # Contenedor para la "Tabla"
-        self.frame_tabla = ctk.CTkFrame(self, fg_color="#1a1a1a", border_color="#D4AF37", border_width=1)
-        self.pack_propagate(False)
-        self.frame_tabla.pack(fill="both", expand=True, padx=20, pady=10)
+        if not self.datos:
+            messagebox.showerror("Error", "No se encontraron datos de ocupación.")
+            self.destroy()
+            return
 
-        # Traemos los datos de la persona desde logic
-        datos = logic.obtener_datos_huesped(num_hab) # Debes crear esta función en logic.py
+        # --- CABECERA: HABITACIÓN Y FOLIO ---
+        ctk.CTkLabel(self, text=f"HABITACIÓN {self.num_hab}", 
+                     font=("Garamond", 28, "bold"), text_color="#D4AF37").pack(pady=(15, 5))
+        
+        self.frame_folio = ctk.CTkFrame(self, fg_color="#1A1A1A", border_color="#D4AF37", border_width=1)
+        self.frame_folio.pack(fill="x", padx=30, pady=5)
+        
+        folio_id = self.datos.get('id_folio', 'N/A')
+        resp = self.datos.get('responsable_folio', 'N/A').upper()
+        
+        ctk.CTkLabel(self.frame_folio, text=f"FOLIO: #{folio_id}", font=("Arial", 14, "bold"), text_color="#D4AF37").pack(pady=(5,0))
+        ctk.CTkLabel(self.frame_folio, text=f"RESPONSABLE: {resp}", font=("Arial", 12), text_color="white").pack(pady=(0,5))
 
-        # Filas de la tabla (Etiqueta: Valor)
-        campos = [
-            ("NOMBRE:", datos.get('nombre', 'N/A')),
-            ("DOCUMENTO:", datos.get('doc', 'N/A')),
-            ("INGRESO:", datos.get('fecha_in', 'N/A')),
-            ("SALIDA:", datos.get('fecha_out', 'N/A')),
-            ("TOTAL PAGO:", f"${datos.get('pago', 0)}")
-        ]
+        # --- CUERPO: DATOS DEL HUÉSPED ---
+        # Quitamos expand=True para que no empuje los botones
+        self.main_frame = ctk.CTkFrame(self, fg_color="#121212", border_color="#333333", border_width=1)
+        self.main_frame.pack(fill="x", padx=30, pady=5) 
 
-        for i, (label, valor) in enumerate(campos):
-            f = ctk.CTkFrame(self.frame_tabla, fg_color="transparent")
-            f.pack(fill="x", padx=10, pady=5)
-            
-            ctk.CTkLabel(f, text=label, font=("Arial", 12, "bold"), text_color="#D4AF37", width=120, anchor="w").pack(side="left")
-            ctk.CTkLabel(f, text=valor, font=("Arial", 12), text_color="white").pack(side="left")
+        self._agregar_info("HUÉSPED EN HAB:", self.datos.get('nombre', 'N/A').upper())
+        self._agregar_info("IDENTIFICACIÓN:", self.datos.get('identificacion', 'N/A'))
+        self._agregar_info("CELULAR:", self.datos.get('celular', 'N/A'))
+        self._agregar_info("FECHA ENTRADA:", self.datos.get('f_entrada', 'N/A'))
+        self._agregar_info("FECHA SALIDA:", self.datos.get('f_salida', 'N/A'))
+        
+        # Línea divisoria más compacta
+        ctk.CTkFrame(self.main_frame, height=1, fg_color="#D4AF37").pack(fill="x", padx=40, pady=10)
+        
+        self._agregar_info("FORMA PAGO:", self.datos.get('forma_pago', 'N/A'))
+        
+        total_p = self.datos.get('v_reserva', '0')
+        self._agregar_info("TOTAL PROVISIONAL:", f"$ {total_p}", color_valor="#00FF00")
+        
+        ctk.CTkLabel(self.main_frame, text="* El total final puede variar según consumos adicionales.", 
+                     font=("Arial", 9, "italic"), text_color="gray").pack(pady=(5, 10))
 
-        # Botones de acción
-        ctk.CTkButton(self, text="CERRAR CUENTA", fg_color="#C62828", text_color="white", 
-                      command=lambda: self.finalizar_estadia(num_hab)).pack(side="left", padx=50, pady=20)
-        ctk.CTkButton(self, text="VOLVER", fg_color="#333333", command=self.destroy).pack(side="right", padx=50, pady=20)
+        # --- BOTONES DE ACCIÓN ---
+        self.btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.btn_frame.pack(pady=(5, 10), padx=30, fill="x")
 
-    def finalizar_estadia(self, num):
-        if messagebox.askyesno("Confirmar", f"¿Desea liberar la habitación {num}?"):
-            logic.cambiar_estado_hab(num, 'SUCIA')
-            self.master.dibujar_puertas() # Refresca el mapa
-            self.destroy()       
-            
+        self.btn_checkout = ctk.CTkButton(self.btn_frame, text="SOLO SALIDA HABITACIÓN ✓", 
+                                         fg_color="#D4AF37", text_color="black",
+                                         font=("Arial", 13, "bold"), height=40,
+                                         command=self.finalizar_estancia)
+        self.btn_checkout.pack(pady=4, fill="x")
+
+        self.btn_cerrar_folio = ctk.CTkButton(self.btn_frame, text="CERRAR FOLIO Y SALIDA TOTAL 🔒", 
+                                             fg_color="#8B0000", text_color="white",
+                                             hover_color="#5a0000",
+                                             font=("Arial", 13, "bold"), height=40,
+                                             command=self.finalizar_todo)
+        self.btn_cerrar_folio.pack(pady=4, fill="x")
+
+    def _agregar_info(self, label_text, value_text, color_valor="white"):
+        f = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        f.pack(fill="x", padx=25, pady=3) # pady reducido de 6 a 3
+        ctk.CTkLabel(f, text=label_text, font=("Arial", 11, "bold"), text_color="#D4AF37").pack(side="left")
+        ctk.CTkLabel(f, text=str(value_text), font=("Arial", 13, "bold"), text_color=color_valor).pack(side="right")
+    
+    def finalizar_estancia(self):
+        if messagebox.askyesno("Confirmar", f"¿Desea liberar solo la habitación {self.num_hab}?"):
+            if logic.liberar_habitacion(self.num_hab):
+                self.master.dibujar_puertas()
+                self.destroy()
+
+    def finalizar_todo(self):
+        id_f = self.datos.get('id_folio')
+        total = self.datos.get('v_reserva', '0')
+        resp = self.datos.get('responsable_folio', 'N/A')
+
+        def confirmar_cierre_total():
+            if logic.liberar_habitacion(self.num_hab):
+                if logic.cerrar_folio_y_salida(self.num_hab, id_f):
+                    messagebox.showinfo("Éxito", "Cobro registrado, Folio cerrado y Habitación liberada.")
+                    self.master.dibujar_puertas()
+                    self.destroy()
+
+        VentanaCobroFolio(self, id_f, total, resp, confirmar_cierre_total)
 class VentanaCheckInMinimal(ctk.CTkToplevel):
     def __init__(self, master, num_hab, sesion, callback_refresh):
         super().__init__(master)
@@ -539,3 +585,52 @@ class VentanaCheckInMinimal(ctk.CTkToplevel):
             self.destroy() # Cierra la ventana
         else:
             messagebox.showerror("Error", "Hubo un problema al guardar la reserva. Revise la base de datos.")
+ 
+ 
+class VentanaCobroFolio(ctk.CTkToplevel):
+    def __init__(self, master, id_folio, total, responsable, callback_exito):
+        super().__init__(master)
+        self.title("Procesar Pago de Folio")
+        self.geometry("400x450")
+        self.configure(fg_color="black")
+        self.id_folio = id_folio
+        self.callback_exito = callback_exito
+        self.grab_set()
+
+        # Título y Datos
+        ctk.CTkLabel(self, text="RESUMEN DE CUENTA", font=("Garamond", 22, "bold"), text_color="#D4AF37").pack(pady=20)
+        
+        info_frame = ctk.CTkFrame(self, fg_color="#1A1A1A", border_color="#D4AF37", border_width=1)
+        info_frame.pack(fill="x", padx=40, pady=10)
+
+        ctk.CTkLabel(info_frame, text=f"Folio: #{id_folio}", font=("Arial", 12, "bold")).pack(pady=5)
+        ctk.CTkLabel(info_frame, text=f"Responsable: {responsable}", font=("Arial", 11)).pack(pady=2)
+        
+        # Total Destacado
+        self.lbl_total = ctk.CTkLabel(self, text=f"TOTAL A PAGAR: $ {total}", 
+                                      font=("Arial", 24, "bold"), text_color="#00FF00")
+        self.lbl_total.pack(pady=20)
+
+        # Método de Pago (Input Box con texto directo como prefieres)
+        self.combo_pago = ctk.CTkComboBox(self, values=["EFECTIVO", "TARJETA", "TRANSFERENCIA"],
+                                          fg_color="#1A1A1A", border_color="#D4AF37", 
+                                          button_color="#D4AF37", dropdown_fg_color="#1A1A1A")
+        self.combo_pago.pack(pady=10, padx=40, fill="x")
+        self.combo_pago.set("Seleccione Método de Pago")
+
+        # Botón Confirmar Cobro
+        self.btn_pagar = ctk.CTkButton(self, text="CONFIRMAR COBRO Y CERRAR", 
+                                       fg_color="#006400", hover_color="#004d00",
+                                       font=("Arial", 14, "bold"), height=45,
+                                       command=self.procesar_pago)
+        self.btn_pagar.pack(pady=30, padx=40, fill="x")
+
+    def procesar_pago(self):
+        metodo = self.combo_pago.get()
+        if "Seleccione" in metodo:
+            messagebox.showwarning("Atención", "Por favor seleccione un método de pago.")
+            return
+            
+        if messagebox.askyesno("Confirmar", f"¿Confirmar pago de $ {self.lbl_total.cget('text').split('$ ')[1]} via {metodo}?"):
+            self.callback_exito() # Ejecuta el cierre en la base de datos
+            self.destroy()           
