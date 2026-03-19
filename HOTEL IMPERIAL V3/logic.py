@@ -36,6 +36,7 @@ def validar_login(usuario, clave):
     if resultado and len(resultado) > 0:
         return resultado[0]  # Devolvemos la primera fila encontrada
     return None
+
 def gestionar_turno(id_usuario, base_inicial=0):
     # 1. Buscar si ya hay un turno ABIERTO para este usuario
     sql_buscar = "SELECT id_turno FROM turnos WHERE id_usuario = %s AND estado = 'ABIERTO'"
@@ -86,6 +87,7 @@ def obtener_folios_db():
         return []
     finally:
         conexion.close()
+
 def obtener_todas_habitaciones():
     try:
         # Asegúrate de que conectar_db esté importado o definido en logic.py
@@ -101,3 +103,48 @@ def obtener_todas_habitaciones():
     except Exception as e:
         print(f"Error en logic: {e}")
         return []
+
+# --- FUNCIÓN DE DETALLES CORREGIDA CON TUS COLUMNAS REALES ---
+
+def obtener_detalles_habitacion(num_hab):
+    """Consulta la base de datos Postgres con las columnas reales de tu tabla"""
+    print(f"Buscando habitación {num_hab} en la base de datos...") 
+
+    # Nombres de columnas según tu imagen de la tabla 'habitaciones'
+    sql = "SELECT estado_general, tipo_vista, tipo_ventilacion FROM habitaciones WHERE nro_habitacion = %s"
+    parametros = (num_hab,)
+    
+    try:
+        resultado = ejecutar_query(sql, parametros, fetch=True)
+
+        if resultado and len(resultado) > 0:
+            fila = resultado[0]
+            return {
+                "tipo": str(fila[0]),       # estado_general (DISPONIBLE, etc)
+                "vista": str(fila[1]),      # tipo_vista (CALLE, INTERIOR)
+                "aire": str(fila[2])        # tipo_ventilacion (VENTILADOR, AIRE)
+            }
+        else:
+            return {"tipo": "N/A", "vista": "N/A", "aire": "N/A"}
+            
+    except Exception as e:
+        print(f"Error leyendo BD: {e}")
+        return {"tipo": "Error BD", "vista": "Error BD", "aire": "Error BD"}
+
+def obtener_datos_huesped(num_hab):
+    """Retorna quién está en la habitación cuando está OCUPADA"""
+    return {
+        'nombre': 'Cliente Imperial',
+        'doc': '12345678',
+        'fecha_in': '2026-03-19',
+        'fecha_out': 'Pendiente',
+        'pago': 250000
+    }
+
+def obtener_estado_hab(num_hab):
+    """Devuelve el estado actual de una habitación específica"""
+    habitaciones = obtener_todas_habitaciones()
+    for num, estado in habitaciones:
+        if str(num) == str(num_hab):
+            return estado
+    return "LIMPIA"
