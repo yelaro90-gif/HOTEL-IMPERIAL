@@ -262,74 +262,137 @@ class VentanaPrincipal(ctk.CTk):
             # Caso Sucia/Mantenimiento/Limpieza
             messagebox.showinfo("Mantenimiento", f"La habitación {num_hab} requiere limpieza.")
 # --- 4. VENTANA DE RESERVA ---
+import customtkinter as ctk
+from tkinter import messagebox
+from tkcalendar import DateEntry
+import logic
+
+
+import customtkinter as ctk
+from tkcalendar import DateEntry
+from tkinter import messagebox
+
 class VentanaNuevaReserva(ctk.CTkToplevel):
     def __init__(self, master, num_hab, sesion):
         super().__init__(master)
         self.num_hab = num_hab
         self.sesion = sesion
+        
         self.title(f"Registro Habitación {self.num_hab}")
-        self.geometry("400x500")
+        self.geometry("900x750") 
         self.configure(fg_color="black")
         self.grab_set()
 
-        ctk.CTkLabel(self, text=f"HABITACIÓN {self.num_hab}", font=("Arial", 20, "bold"), text_color="#D4AF37").pack(pady=20)
-        self.entry_nom = ctk.CTkEntry(self, placeholder_text="NOMBRE DEL HUÉSPED", width=300)
-        self.entry_nom.pack(pady=10)
+        # --- TÍTULO ---
+        ctk.CTkLabel(self, text=f"REGISTRO HABITACIÓN {self.num_hab}", 
+                     font=("Garamond", 28, "bold"), text_color="#D4AF37").pack(pady=15)
+
+        # --- SECCIÓN 1: DATOS HUÉSPED ---
+        self._etiqueta(self, "DATOS DEL HUÉSPED")
         
-        # --- AÑADIDO: Campos adicionales con texto directo (placeholder) ---
-        self.entry_doc = ctk.CTkEntry(self, placeholder_text="IDENTIFICACIÓN", width=300)
-        self.entry_doc.pack(pady=10)
+        self.frame_huesped = ctk.CTkFrame(self, fg_color="transparent")
+        self.frame_huesped.pack(fill="x", padx=20)
+        self.frame_huesped.columnconfigure((0, 1), weight=1)
 
-        self.entry_cel = ctk.CTkEntry(self, placeholder_text="CELULAR", width=300)
-        self.entry_cel.pack(pady=10)
+        # Usamos exactamente tus variables originales
+        self.entry_nom = self._campo_grid(self.frame_huesped, "NOMBRE COMPLETO", 0, 0)
+        self.entry_doc = self._campo_grid(self.frame_huesped, "IDENTIFICACIÓN", 0, 1)
+        self.entry_cel = self._campo_grid(self.frame_huesped, "CELULAR", 1, 0)
+        self.entry_email = self._campo_grid(self.frame_huesped, "EMAIL (OPCIONAL)", 1, 1)
+        self.entry_proc = self._campo_grid(self.frame_huesped, "PROCEDENCIA", 2, 0, colspan=2)
 
-        self.entry_entrada = ctk.CTkEntry(self, placeholder_text="FECHA ENTRADA (AAAA-MM-DD)", width=300)
-        self.entry_entrada.pack(pady=10)
+        # Línea dorada divisoria
+        ctk.CTkFrame(self, height=2, fg_color="#D4AF37").pack(fill="x", padx=40, pady=15)
 
-        self.entry_salida = ctk.CTkEntry(self, placeholder_text="FECHA SALIDA (AAAA-MM-DD)", width=300)
-        self.entry_salida.pack(pady=10)
+        # --- SECCIÓN 2: DETALLES DE RESERVA Y PAGO ---
+        self._etiqueta(self, "DETALLES DE RESERVA Y PAGO")
 
-        self.entry_valor = ctk.CTkEntry(self, placeholder_text="VALOR TOTAL", width=300)
-        self.entry_valor.pack(pady=10)
+        self.frame_reserva = ctk.CTkFrame(self, fg_color="transparent")
+        self.frame_reserva.pack(fill="x", padx=20)
+        self.frame_reserva.columnconfigure((0, 1), weight=1)
 
-        # --- AÑADIDO: Selección de Folio y Banco (Provisional) ---
-        import logic # Asegúrate de tener el import arriba
+        # Calendarios (Manteniendo funcionalidad original)
+        self.cal_entrada = self._calendario_grid(self.frame_reserva, "📅 FECHA ENTRADA", 0, 0)
+        self.cal_salida = self._calendario_grid(self.frame_reserva, "📅 FECHA SALIDA (OPCIONAL)", 0, 1)
+
+        # Combos y Valor Total
+        import logic # Asegúrate que logic esté accesible
         folios_db = logic.cargar_folios_activos()
         opciones_f = [f"{f[0]} - {f[1]}" for f in folios_db]
         
-        self.combo_folio = ctk.CTkComboBox(self, values=["NUEVO FOLIO"] + opciones_f, width=300)
-        self.combo_folio.pack(pady=10)
+        self.combo_folio = self._selector_grid(self.frame_reserva, "📁 VINCULAR A FOLIO", ["NUEVO FOLIO"] + opciones_f, 1, 0)
+        self.entry_valor = self._campo_grid(self.frame_reserva, "💵 VALOR TOTAL RESERVA", 1, 1)
 
-        self.combo_pago = ctk.CTkComboBox(self, values=["EFECTIVO", "BANCOLOMBIA", "NEQUI", "DAVIPLATA"], width=300)
-        self.combo_pago.pack(pady=10)
-        
-        # * (No cambio tu botón original, solo le asigno la función de guardado real)
-        ctk.CTkButton(self, text="GUARDAR", fg_color="#D4AF37", text_color="black", 
-                      command=self.ejecutar_guardado).pack(pady=20)
+        # Fila final de selectores (3 columnas)
+        self.frame_combos = ctk.CTkFrame(self, fg_color="transparent")
+        self.frame_combos.pack(fill="x", padx=20, pady=10)
+        self.frame_combos.columnconfigure((0, 1, 2), weight=1)
 
-    # --- AÑADIDO: Función interna para conectar con logic.py ---
+        self.combo_pago = self._selector_grid(self.frame_combos, "💳 PAGO", ["EFECTIVO", "CREDITO", "TRANSFERENCIA"], 0, 0)
+        self.combo_tipo_res = self._selector_grid(self.frame_combos, "🔘 TIPO", ["INMEDIATA", "ANTICIPADA", "TEMPORAL"], 0, 1)
+        self.combo_estado = self._selector_grid(self.frame_combos, "✅ ESTADO", ["ACTIVA", "ANULADA"], 0, 2)
+
+        # --- BOTÓN GUARDAR (CENTRADITO) ---
+        self.btn_guardar = ctk.CTkButton(self, text="CONFIRMAR Y GUARDAR ✓", 
+                                        fg_color="#D4AF37", text_color="black",
+                                        font=("Arial", 16, "bold"), height=50, width=400,
+                                        command=self.ejecutar_guardado)
+        self.btn_guardar.pack(pady=25)
+
+    # --- MÉTODOS DE SOPORTE (Mantienen tu lógica de diseño) ---
+    def _campo_grid(self, parent, p_text, row, col, colspan=1):
+        e = ctk.CTkEntry(parent, placeholder_text=p_text, height=35, 
+                         border_color="#D4AF37", fg_color="#1A1A1A")
+        e.grid(row=row, column=col, columnspan=colspan, padx=10, pady=8, sticky="ew")
+        return e
+
+    def _selector_grid(self, parent, titulo, valores, row, col):
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        f.grid(row=row, column=col, padx=10, pady=5, sticky="ew")
+        ctk.CTkLabel(f, text=titulo, font=("Arial", 10, "bold"), text_color="#D4AF37").pack(anchor="w")
+        c = ctk.CTkComboBox(f, values=valores, border_color="#D4AF37", fg_color="#1A1A1A", button_color="#D4AF37")
+        c.pack(fill="x")
+        return c
+
+    def _calendario_grid(self, parent, titulo, row, col):
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        f.grid(row=row, column=col, padx=10, pady=5, sticky="ew")
+        ctk.CTkLabel(f, text=titulo, font=("Arial", 10, "bold"), text_color="#D4AF37").pack(anchor="w")
+        cal = DateEntry(f, background='#D4AF37', date_pattern='yyyy-mm-dd')
+        cal.pack(fill="x", ipady=3)
+        return cal
+
+    def _etiqueta(self, parent, texto):
+        ctk.CTkLabel(parent, text=texto, font=("Arial", 12, "bold"), text_color="#D4AF37").pack(pady=5)
+
     def ejecutar_guardado(self):
+        # Esta es TU LOGICA ORIGINAL intacta
         datos = {
             'nro_hab': self.num_hab,
-            'nombre': self.entry_nom.get(),
+            'nombre': self.entry_nom.get().upper(),
             'identificacion': self.entry_doc.get(),
             'celular': self.entry_cel.get(),
-            'f_entrada': self.entry_entrada.get(),
-            'f_salida': self.entry_salida.get(),
-            'v_total': self.entry_valor.get(),
+            'email': self.entry_email.get() or "N/A",
+            'procedencia': self.entry_proc.get() or "N/A",
+            'f_entrada': self.cal_entrada.get(),
+            'f_salida': self.cal_salida.get(),
+            'v_reserva': self.entry_valor.get(),
             'forma_pago': self.combo_pago.get(),
-            'folio_seleccionado': self.combo_folio.get() if self.combo_folio.get() != "NUEVO FOLIO" else None,
+            'tipo_reserva': self.combo_tipo_res.get(),
+            'estado_reserva': self.combo_estado.get(),
+            'folio_seleccionado': self.combo_folio.get() if "NUEVO" not in self.combo_folio.get() else None,
             'id_usuario': self.sesion['id_usuario'],
             'id_turno': self.sesion['id_turno']
         }
         
         import logic
-        # Usamos el nombre de función que confirmaste en el mensaje anterior *
         if logic.realizar_checkin_completo(datos):
-            from tkinter import messagebox
             messagebox.showinfo("Éxito", "Registro guardado.")
-            self.master.dibujar_puertas() # Refresca el mapa
+            self.master.dibujar_puertas()
             self.destroy()
+        else:
+            messagebox.showerror("Error", "No se pudo guardar.")
+
 # --- 5. VENTANA DETALLE HUÉSPED ---
 class VentanaDetalleHuesped(ctk.CTkToplevel):
     def __init__(self, master, num_hab):
