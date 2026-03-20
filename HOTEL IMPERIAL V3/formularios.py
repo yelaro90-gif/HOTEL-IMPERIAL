@@ -153,7 +153,6 @@ class VentanaPrincipal(ctk.CTk):
     }
 
     def __init__(self, sesion=None):
-        
         super().__init__()
         self.sesion = sesion
         self.title("HOTEL IMPERIAL V3")
@@ -161,6 +160,7 @@ class VentanaPrincipal(ctk.CTk):
         self.configure(fg_color="black")
 
         # 1. Barra Superior (Toolbar)
+        # Nota: Asegúrate de que en tu ToolbarPrincipal exista el botón que llame a VentanaRegistroTerceros
         self.menu = ToolbarPrincipal(self, usuario_nom=self.sesion['nombre'], turno_id=self.sesion['id_turno'])
         self.menu.pack(side="top", fill="x")
 
@@ -181,7 +181,7 @@ class VentanaPrincipal(ctk.CTk):
                                              font=("Arial", 13), text_color="gray", justify="left")
         self.lbl_info_tecnica.pack(pady=30, padx=20)
 
-        # --- 2. ÚNICO AGREGADO: Cuadro para Reservas Anticipadas ---
+        # --- Cuadro para Reservas Anticipadas ---
         ctk.CTkLabel(self.panel_detalles, text="RESERVAS PRÓXIMAS", 
                      font=("Garamond", 15, "bold"), text_color="#0000FF").pack(pady=(10, 0))
         
@@ -191,10 +191,14 @@ class VentanaPrincipal(ctk.CTk):
 
         # 3. CONTENEDOR DERECHO: MAPA DE PUERTAS
         self.area_puertas = ctk.CTkScrollableFrame(self.contenedor_maestro, fg_color="black", 
-                                                   label_text="MAPA DE HABITACIONES", label_text_color="#FFD700")
+                                                    label_text="MAPA DE HABITACIONES", label_text_color="#FFD700")
         self.area_puertas.pack(side="right", fill="both", expand=True, padx=10, pady=10)
 
         self.dibujar_puertas()
+
+    def abrir_registro_terceros(self):
+        """Método para invocar la nueva ventana de Terceros"""
+        VentanaRegistroTerceros(self)
 
     def actualizar_panel_izquierdo(self, num_hab):
         """Función que se activa con el HOVER de la puerta"""
@@ -224,7 +228,6 @@ class VentanaPrincipal(ctk.CTk):
 
         col, fila = 0, 0
         for num, estado in habitaciones_datos:
-            # 3. ÚNICO AGREGADO: Color de borde según el diccionario
             color_borde = self.COLORES_ESTADOS.get(estado, "#D4AF37")
 
             puerta = PuertaHabitacion(
@@ -233,7 +236,7 @@ class VentanaPrincipal(ctk.CTk):
                 estado, 
                 comando=self.gestionar_clic_puerta,
                 hover_comando=self.actualizar_panel_izquierdo,
-                color_borde=color_borde # Para que la puerta sepa de qué color ser
+                color_borde=color_borde 
             )
             puerta.grid(row=fila, column=col, padx=15, pady=15)
             
@@ -246,13 +249,10 @@ class VentanaPrincipal(ctk.CTk):
         """Lógica de decisión al hacer CLIC real"""
         estado = logic.obtener_estado_hab(num_hab)
         
-        # MANTENEMOS TUS NOMBRES ORIGINALES
         if estado in ['LIMPIA', 'DISPONIBLE', 'RESERVADA']:
-            # Usamos TU clase original para que no aparezca el error amarillo
             VentanaNuevaReserva(self, num_hab, self.sesion)
             
         elif estado == 'OCUPADA':
-            # Usamos TU clase original
             VentanaDetalleHuesped(self, num_hab)
             
         elif estado == 'INHABILITADA':
@@ -633,4 +633,185 @@ class VentanaCobroFolio(ctk.CTkToplevel):
             
         if messagebox.askyesno("Confirmar", f"¿Confirmar pago de $ {self.lbl_total.cget('text').split('$ ')[1]} via {metodo}?"):
             self.callback_exito() # Ejecuta el cierre en la base de datos
-            self.destroy()           
+            self.destroy() 
+import customtkinter as ctk
+from tkinter import messagebox
+import logic
+
+class VentanaRegistroTerceros(ctk.CTkToplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.title("Gestión de Terceros - Hotel Imperial")
+        self.geometry("600x750")
+        self.configure(fg_color="black")
+        self.grab_set()
+
+        # Título Dorado
+        ctk.CTkLabel(self, text="REGISTRO DE TERCEROS", 
+                     font=("Garamond", 30, "bold"), text_color="#D4AF37").pack(pady=20)
+
+        # Frame Principal
+        self.main_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_frame.pack(fill="both", expand=True, padx=50)
+
+        # --- CAMPOS DE ENTRADA ---
+        self.ent_nombres = self._crear_input("Nombres Completos / Razón Social")
+        
+        f_id = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        f_id.pack(fill="x", pady=10)
+        
+        self.combo_tipo_id = ctk.CTkComboBox(f_id, values=["Cédula", "NIT", "Pasaporte"], 
+                                             fg_color="#1A1A1A", border_color="#D4AF37", 
+                                             button_color="#D4AF37", width=150)
+        self.combo_tipo_id.pack(side="left", padx=(0, 10))
+        self.combo_tipo_id.set("Tipo ID")
+
+        self.ent_id = ctk.CTkEntry(f_id, placeholder_text="Número de Identificación", 
+                                   fg_color="#1A1A1A", border_color="#D4AF37", height=40)
+        self.ent_id.pack(side="left", fill="x", expand=True)
+
+        self.ent_direccion = self._crear_input("Dirección de Residencia/Fiscal")
+        self.ent_telefono = self._crear_input("Teléfono de Contacto")
+        self.ent_correo = self._crear_input("Correo Electrónico")
+
+        # --- SECCIÓN DE ROLES ---
+        f_roles = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        f_roles.pack(fill="x", pady=15)
+
+        self.combo_rol = ctk.CTkComboBox(f_roles, values=["Cliente", "Empleado", "Proveedor", "Administrador", "Banco"],
+                                         command=self._verificar_rol_banco,
+                                         fg_color="#1A1A1A", border_color="#D4AF37", 
+                                         button_color="#D4AF37", width=240)
+        self.combo_rol.pack(side="left", padx=(0, 10))
+        self.combo_rol.set("Rol Principal")
+
+        self.ent_cargo = ctk.CTkEntry(f_roles, placeholder_text="Cargo (Ej: Aseo, Recepción)", 
+                                      fg_color="#1A1A1A", border_color="#D4AF37", height=40)
+        self.ent_cargo.pack(side="left", fill="x", expand=True)
+
+        # --- BOTÓN ESPECIAL PARA BANCOS ---
+        self.btn_cuentas = ctk.CTkButton(self.main_frame, text="+ Gestionar Cuentas Bancarias", 
+                                         fg_color="#1A1A1A", border_color="#D4AF37", border_width=1,
+                                         text_color="#D4AF37", hover_color="#222222",
+                                         command=self._abrir_gestion_cuentas)
+
+        # --- BOTÓN GUARDAR ---
+        self.btn_guardar = ctk.CTkButton(self, text="GUARDAR TERCERO", 
+                                         fg_color="#D4AF37", text_color="black",
+                                         font=("Arial", 16, "bold"), height=50,
+                                         command=self.guardar_tercero)
+        self.btn_guardar.pack(pady=30, padx=50, fill="x")
+
+    def _crear_input(self, placeholder):
+        ent = ctk.CTkEntry(self.main_frame, placeholder_text=placeholder, 
+                           fg_color="#1A1A1A", border_color="#D4AF37", height=40)
+        ent.pack(fill="x", pady=10)
+        return ent
+
+    def _verificar_rol_banco(self, rol):
+        if rol == "Banco":
+            self.btn_cuentas.pack(pady=10, fill="x")
+            # Limpiamos y deshabilitamos cargo para Bancos
+            self.ent_cargo.delete(0, 'end')
+            self.ent_cargo.configure(state="disabled")
+        else:
+            self.btn_cuentas.pack_forget()
+            self.ent_cargo.configure(state="normal")
+
+    def _abrir_gestion_cuentas(self):
+        messagebox.showinfo("Cuentas", "Gestor de cuentas bancarias en desarrollo.")
+
+    def guardar_tercero(self):
+        rol_sel = self.combo_rol.get()
+        cargo_val = self.ent_cargo.get().strip().upper() if rol_sel != "Banco" else "N/A"
+
+        datos = {
+            'nombres': self.ent_nombres.get().strip().upper(),
+            'tipo_id': self.combo_tipo_id.get(),
+            'id': self.ent_id.get().strip(),
+            'direccion': self.ent_direccion.get().strip().upper(),
+            'telefono': self.ent_telefono.get().strip(),
+            'correo': self.ent_correo.get().strip().lower(),
+            'rol': rol_sel,
+            'cargo': cargo_val
+        }
+
+        if not datos['nombres'] or not datos['id'] or "Tipo" in datos['tipo_id'] or "Rol" in datos['rol']:
+            messagebox.showwarning("Atención", "Nombre, ID, Tipo y Rol son obligatorios.")
+            return
+
+        # Intentamos guardar
+        if logic.registrar_tercero(datos):
+            # Si es BANCO, ofrecemos gestionar cuentas de inmediato
+            if rol_sel == "Banco":
+                if messagebox.askyesno("Éxito", f"Banco registrado. ¿Desea agregar cuentas bancarias a {datos['nombres']} ahora?"):
+                    # Obtenemos el ID que la DB le asignó (necesitas crear esta función en logic o que registrar_tercero lo devuelva)
+                    id_db = logic.obtener_id_tercero_por_identificacion(datos['id'])
+                    VentanaCuentasBancarias(self, id_db, datos['nombres'])
+                else:
+                    self.destroy()
+            else:
+                messagebox.showinfo("Éxito", "Registro guardado correctamente.")
+                self.destroy()
+        else:
+            messagebox.showerror("Error", "No se pudo guardar. Revise la consola.")
+class VentanaCuentasBancarias(ctk.CTkToplevel):
+    def __init__(self, master, id_banco, nombre_banco):
+        super().__init__(master)
+        self.id_banco = id_banco
+        self.title(f"Cuentas: {nombre_banco}")
+        self.geometry("450x500")
+        self.configure(fg_color="black")
+        self.grab_set()
+
+        # Título
+        ctk.CTkLabel(self, text="GESTIÓN DE CUENTAS", 
+                     font=("Garamond", 22, "bold"), text_color="#D4AF37").pack(pady=20)
+        
+        ctk.CTkLabel(self, text=f"Banco: {nombre_banco}", 
+                     font=("Arial", 12, "italic"), text_color="gray").pack()
+
+        # Frame de Entradas
+        self.f_inputs = ctk.CTkFrame(self, fg_color="transparent")
+        self.f_inputs.pack(pady=20, padx=40, fill="x")
+
+        # Inputs con placeholder (sin labels)
+        self.ent_numero = ctk.CTkEntry(self.f_inputs, placeholder_text="Número de Cuenta", 
+                                       fg_color="#1A1A1A", border_color="#D4AF37", height=40)
+        self.ent_numero.pack(fill="x", pady=10)
+
+        self.combo_tipo = ctk.CTkComboBox(self.f_inputs, values=["Ahorros", "Corriente", "Fiduciaria"],
+                                          fg_color="#1A1A1A", border_color="#D4AF37", 
+                                          button_color="#D4AF37", height=40)
+        self.combo_tipo.pack(fill="x", pady=10)
+        self.combo_tipo.set("Tipo de Cuenta")
+
+        self.ent_desc = ctk.CTkEntry(self.f_inputs, placeholder_text="Descripción (Ej: Recaudos, Nómina)", 
+                                     fg_color="#1A1A1A", border_color="#D4AF37", height=40)
+        self.ent_desc.pack(fill="x", pady=10)
+
+        # Botón Guardar Cuenta
+        self.btn_add = ctk.CTkButton(self, text="AGREGAR CUENTA", 
+                                     fg_color="#D4AF37", text_color="black",
+                                     font=("Arial", 14, "bold"), height=45,
+                                     command=self.guardar_cuenta)
+        self.btn_add.pack(pady=20, padx=40, fill="x")
+
+    def guardar_cuenta(self):
+        num = self.ent_numero.get().strip()
+        tipo = self.combo_tipo.get()
+        desc = self.ent_desc.get().strip().upper()
+
+        if not num or "Tipo" in tipo:
+            messagebox.showwarning("Atención", "Complete el número y tipo de cuenta.")
+            return
+
+        # Llamada real a la lógica
+        if logic.guardar_cuenta_bancaria(self.id_banco, num, tipo, desc):
+            messagebox.showinfo("Éxito", f"Cuenta {num} vinculada al banco.")
+            # Si quieres agregar otra cuenta del mismo banco, podrías limpiar los campos 
+            # en lugar de cerrar la ventana
+            self.ent_numero.delete(0, 'end')
+            self.ent_desc.delete(0, 'end')
+        else:
+            messagebox.showerror("Error", "No se pudo vincular la cuenta.")

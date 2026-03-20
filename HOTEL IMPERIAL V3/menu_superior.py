@@ -17,7 +17,9 @@ class ToolbarPrincipal(ctk.CTkFrame):
         self.btn_archivo = ctk.CTkButton(self, text="ARCHIVO", **estilo_btn)
         self.btn_archivo.pack(side="left", padx=2)
 
-        self.btn_edicion = ctk.CTkButton(self, text="EDICIÓN", **estilo_btn)
+        # Usaremos EDICIÓN para abrir Terceros (o puedes crear uno nuevo)
+        self.btn_edicion = ctk.CTkButton(self, text="TERCEROS", **estilo_btn, 
+                                         command=self.master.abrir_registro_terceros)
         self.btn_edicion.pack(side="left", padx=2)
 
         self.btn_herramientas = ctk.CTkButton(self, text="HERRAMIENTAS", **estilo_btn)
@@ -27,5 +29,3 @@ class ToolbarPrincipal(ctk.CTkFrame):
         self.lbl_info = ctk.CTkLabel(self, text=f"👤 {usuario_nom} | 🕒 Turno: {turno_id}", 
                                      text_color="#FFD700", font=("Arial", 11))
         self.lbl_info.pack(side="right", padx=20)
-
-    # Aquí podemos agregar funciones para que los botones abran menús desplegables

@@ -273,3 +273,73 @@ def liberar_habitacion(num_hab):
         return False
     finally:
         conexion.close()
+def registrar_tercero(datos):
+    """Inserta los datos del formulario en la tabla terceros"""
+    conexion = conectar() # Tu función de conexión
+    if not conexion: return False
+    try:
+        cur = conexion.cursor()
+        query = """
+            INSERT INTO terceros (nombres, tipo_id, identificacion, direccion, 
+                                 telefono, correo, rol_principal, cargo_especialidad)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        valores = (
+            datos['nombres'], datos['tipo_id'], datos['id'], 
+            datos['direccion'], datos['telefono'], datos['correo'], 
+            datos['rol'], datos['cargo']
+        )
+        cur.execute(query, valores)
+        conexion.commit()
+        return True
+    except Exception as e:
+        print(f"Error en BD: {e}")
+        return False
+    finally:
+        conexion.close()    
+def guardar_cuenta_bancaria(id_tercero, numero, tipo, descripcion):
+    conexion = conectar()
+    if not conexion: return False
+    try:
+        cur = conexion.cursor()
+        # Añadimos el campo estado con valor True por defecto
+        query = """
+            INSERT INTO cuentas_bancarias (id_tercero, numero_cuenta, tipo_cuenta, descripcion, estado)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        cur.execute(query, (id_tercero, numero, tipo, descripcion, True))
+        conexion.commit()
+        return True
+    except Exception as e:
+        print(f"Error logic.guardar_cuenta_bancaria: {e}")
+        return False
+    finally:
+        conexion.close()
+def obtener_id_tercero_por_identificacion(identificacion):
+    conexion = conectar()
+    if not conexion: return None
+    try:
+        cur = conexion.cursor()
+        cur.execute("SELECT id_tercero FROM terceros WHERE identificacion = %s", (identificacion,))
+        resultado = cur.fetchone()
+        return resultado[0] if resultado else None
+    finally:
+        conexion.close()       
+def cambiar_estado_cuenta(id_cuenta, nuevo_estado):
+    """
+    Cambia el estado de una cuenta (True para activa, False para inactiva)
+    """
+    conexion = conectar()
+    if not conexion: return False
+    try:
+        cur = conexion.cursor()
+        # Usamos un UPDATE para no borrar el registro, solo ocultarlo
+        cur.execute("UPDATE cuentas_bancarias SET estado = %s WHERE id_cuenta = %s", 
+                    (nuevo_estado, id_cuenta))
+        conexion.commit()
+        return True
+    except Exception as e:
+        print(f"Error logic.cambiar_estado_cuenta: {e}")
+        return False
+    finally:
+        conexion.close()
