@@ -343,3 +343,134 @@ def cambiar_estado_cuenta(id_cuenta, nuevo_estado):
         return False
     finally:
         conexion.close()
+def obtener_personal_aseo():
+    conexion = conectar()
+    if not conexion: return []
+    try:
+        cur = conexion.cursor()
+        # Filtramos por el cargo que definimos ayer
+        query = "SELECT id_tercero, nombres FROM terceros WHERE cargo_especialidad = 'ASEO' AND estado = True"
+        cur.execute(query)
+        return cur.fetchall() # Devuelve lista de tuplas [(id, nombre), ...]
+    finally:
+        conexion.close()
+# --- GESTIÓN DE HISTORIAL DE ASEO Y ESTADOS ---
+
+def iniciar_limpieza(num_hab, id_empleado):
+    """Registra el inicio del aseo y vincula al empleado"""
+    conexion = conectar()
+    if not conexion: return False
+    try:
+        cur = conexion.cursor()
+        # 1. Obtener el id_habitacion interno usando el nro_habitacion
+        cur.execute("SELECT id_habitacion FROM habitaciones WHERE nro_habitacion = %s", (num_hab,))
+        res = cur.fetchone()
+        if not res: return False
+        id_hab_interno = res[0]
+
+        # 2. Insertar en el historial (Usando los nombres de tu nueva tabla)
+        query_h = """
+            INSERT INTO historial_aseo (id_habitacion, id_empleado, fecha_inicio, estado_final)
+            VALUES (%s, %s, CURRENT_TIMESTAMP, 'EN PROCESO')
+        """
+        cur.execute(query_h, (id_hab_interno, id_empleado))
+        
+        # 3. Actualizar el estado de la habitación a 'LIMPIEZA'
+        cur.execute("UPDATE habitaciones SET estado_aseo = 'LIMPIEZA' WHERE nro_habitacion = %s", (num_hab,))
+        
+        conexion.commit()
+        return True
+    except Exception as e:
+        print(f"Error logic.iniciar_limpieza: {e}")
+        conexion.rollback()
+        return False
+    finally:
+        conexion.close()
+
+def finalizar_limpieza(num_hab):
+    """Cierra el historial y pone la habitación como LIMPIA (Dorado)"""
+    conexion = conectar()
+    if not conexion: return False
+    try:
+        cur = conexion.cursor()
+        # 1. Obtener ID interno
+        cur.execute("SELECT id_habitacion FROM habitaciones WHERE nro_habitacion = %s", (num_hab,))
+        id_hab_interno = cur.fetchone()[0]
+
+        # 2. Finalizar el registro en historial_aseo
+        query_f = """
+            UPDATE historial_aseo 
+            SET fecha_fin = CURRENT_TIMESTAMP, estado_final = 'TERMINADA'
+            WHERE id_habitacion = %s AND estado_final = 'EN PROCESO'
+        """
+        cur.execute(query_f, (id_hab_interno,))
+        
+        # 3. Cambiar a estado LIMPIA
+        cur.execute("UPDATE habitaciones SET estado_aseo = 'LIMPIA' WHERE nro_habitacion = %s", (num_hab,))
+        
+        conexion.commit()
+        return True
+    except Exception as e:
+        print(f"Error logic.finalizar_limpieza: {e}")
+        return False
+    finally:
+        conexion.close()
+
+def obtener_aseo_en_progreso(num_hab):
+    """Verifica si una habitación está siendo limpiada actualmente"""
+    conexion = conectar()
+    if not conexion: return None
+    try:
+        cur = conexion.cursor()
+        query = """
+            SELECT t.nombres 
+            FROM historial_aseo h
+            JOIN terceros t ON h.id_empleado = t.id_tercero
+            JOIN habitaciones hab ON h.id_habitacion = hab.id_habitacion
+            WHERE hab.nro_habitacion = %s AND h.estado_final = 'EN PROCESO'
+        """
+        cur.execute(query, (num_hab,))
+        res = cur.fetchone()
+        return res[0] if res else None
+    finally:
+        conexion.close()
+# --- NUEVAS FUNCIONES DE ASEO ---
+
+def obtener_aseo_en_progreso(num_hab):
+    """Verifica si alguien está limpiando la habitación actualmente"""
+    conexion = conectar()
+    if not conexion: return None
+    try:
+        cur = conexion.cursor()
+        query = """
+            SELECT t.nombres 
+            FROM historial_aseo h
+            JOIN terceros t ON h.id_empleado = t.id_tercero
+            JOIN habitaciones hab ON h.id_habitacion = hab.id_habitacion
+            WHERE hab.nro_habitacion = %s AND h.estado_final = 'EN PROCESO'
+        """
+        cur.execute(query, (num_hab,))
+        res = cur.fetchone()
+        return res[0] if res else None
+    finally:
+        conexion.close()
+
+def finalizar_limpieza(num_hab):
+    """Cierra el historial y cambia estado a LIMPIA"""
+    conexion = conectar()
+    if not conexion: return False
+    try:
+        cur = conexion.cursor()
+        # 1. Obtener ID interno de la hab
+        cur.execute("SELECT id_habitacion FROM habitaciones WHERE nro_habitacion = %s", (num_hab,))
+        id_int = cur.fetchone()[0]
+        # 2. Finalizar historial
+        cur.execute("UPDATE historial_aseo SET fecha_fin = CURRENT_TIMESTAMP, estado_final = 'TERMINADA' WHERE id_habitacion = %s AND estado_final = 'EN PROCESO'", (id_int,))
+        # 3. Cambiar a LIMPIA
+        cur.execute("UPDATE habitaciones SET estado_aseo = 'LIMPIA' WHERE nro_habitacion = %s", (num_hab,))
+        conexion.commit()
+        return True
+    except:
+        return False
+    finally:
+        conexion.close()

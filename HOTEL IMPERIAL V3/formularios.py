@@ -246,21 +246,28 @@ class VentanaPrincipal(ctk.CTk):
                 fila += 1
 
     def gestionar_clic_puerta(self, num_hab):
-        """Lógica de decisión al hacer CLIC real"""
         estado = logic.obtener_estado_hab(num_hab)
-        
-        if estado in ['LIMPIA', 'DISPONIBLE', 'RESERVADA']:
-            VentanaNuevaReserva(self, num_hab, self.sesion)
-            
-        elif estado == 'OCUPADA':
+
+        if estado == "OCUPADA":
+            # REPARADO: Quitamos 'self.sesion' porque esta ventana no la pide
             VentanaDetalleHuesped(self, num_hab)
-            
-        elif estado == 'INHABILITADA':
-            messagebox.showwarning("Bloqueo", f"La habitación {num_hab} se encuentra fuera de servicio.")
-            
-        else:
-            # Caso Sucia/Mantenimiento/Limpieza
-            messagebox.showinfo("Mantenimiento", f"La habitación {num_hab} requiere limpieza.")
+        
+        elif estado == "RESERVADA":
+            # Esta SÍ la pide (vimos el error antes), así que la dejamos
+            VentanaNuevaReserva(self, num_hab, self.sesion)
+
+        elif estado == "LIMPIEZA":
+            empleado = logic.obtener_aseo_en_progreso(num_hab)
+            if empleado:
+                if messagebox.askyesno("Limpieza", f"Hab {num_hab} en aseo por: {empleado}\n¿Terminaron?"):
+                    if logic.finalizar_limpieza(num_hab):
+                        self.dibujar_puertas()
+            else:
+                VentanaAsignarLimpieza(self, num_hab)
+
+        elif estado == "LIMPIA":
+            # Esta SÍ la pide, la dejamos igual
+            VentanaNuevaReserva(self, num_hab, self.sesion)
 # --- 4. VENTANA DE RESERVA ---
 import customtkinter as ctk
 from tkinter import messagebox
@@ -815,3 +822,40 @@ class VentanaCuentasBancarias(ctk.CTkToplevel):
             self.ent_desc.delete(0, 'end')
         else:
             messagebox.showerror("Error", "No se pudo vincular la cuenta.")
+class VentanaAsignarLimpieza(ctk.CTkToplevel):
+    def __init__(self, master, num_hab):
+        super().__init__(master)
+        self.num_hab = num_hab
+        self.title(f"Aseo - {num_hab}")
+        self.geometry("300x250")
+        self.configure(fg_color="black")
+        self.grab_set()
+
+        ctk.CTkLabel(self, text=f"ASIGNAR ASEO {num_hab}", 
+                     font=("Garamond", 18, "bold"), text_color="#D4AF37").pack(pady=15)
+
+        self.personal = logic.obtener_personal_aseo()
+        nombres = [p[1] for p in self.personal] if self.personal else ["Sin personal"]
+
+        self.combo = ctk.CTkComboBox(self, values=nombres, fg_color="#1A1A1A", 
+                                      border_color="#D4AF37", button_color="#D4AF37")
+        self.combo.set("Seleccionar Camarera/o")
+        self.combo.pack(pady=15)
+
+        # EL BOTÓN: Asegúrate de que command=self.confirmar coincida con el nombre abajo
+        self.btn_iniciar = ctk.CTkButton(self, text="INICIAR LIMPIEZA", 
+                                         fg_color="#D4AF37", text_color="black", 
+                                         font=("Arial", 12, "bold"),
+                                         command=self.confirmar)
+        self.btn_iniciar.pack(pady=15)
+
+    def confirmar(self):
+        nom = self.combo.get()
+        if nom == "Seleccionar Camarera/o" or nom == "Sin personal": 
+            return
+        
+        id_emp = next(p[0] for p in self.personal if p[1] == nom)
+        
+        if logic.iniciar_limpieza(self.num_hab, id_emp):
+            self.master.dibujar_puertas() # Refresca el mapa
+            self.destroy()
