@@ -474,3 +474,62 @@ def finalizar_limpieza(num_hab):
         return False
     finally:
         conexion.close()
+ # --- LÓGICA DE PRODUCTOS Y SERVICIOS ---
+
+def obtener_catalogo_productos():
+    """Trae todos los productos activos para llenar los combos de la interfaz"""
+    conexion = conectar()
+    if not conexion: return []
+    try:
+        cur = conexion.cursor()
+        cur.execute("SELECT id_producto, nombre, precio FROM productos_servicios WHERE estado = 'ACTIVO' ORDER BY nombre ASC")
+        return cur.fetchall()
+    finally:
+        conexion.close()
+
+def registrar_cargo_a_folio(id_folio, num_hab, id_producto, cantidad, id_usuario):
+    conexion = conectar()
+    if not conexion: return False
+    try:
+        cur = conexion.cursor()
+        
+        # 1. Obtenemos el ID interno de la habitación a partir del número
+        cur.execute("SELECT id_habitacion FROM habitaciones WHERE nro_habitacion = %s", (num_hab,))
+        id_hab_interno = cur.fetchone()[0]
+
+        # 2. Obtenemos el precio actual del catálogo
+        cur.execute("SELECT precio FROM productos_servicios WHERE id_producto = %s", (id_producto,))
+        precio_unitario = cur.fetchone()[0]
+        total = precio_unitario * cantidad
+
+        # 3. Insertamos el detalle especificando la habitación
+        query = """
+            INSERT INTO detalles_folio (id_folio, id_habitacion, id_producto, cantidad, precio_unitario, subtotal, id_usuario)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        cur.execute(query, (id_folio, id_hab_interno, id_producto, cantidad, precio_unitario, total, id_usuario))
+        conexion.commit()
+        return True
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
+    finally:
+        conexion.close()
+def obtener_folio_activo_por_hab(num_hab):
+    """Busca el ID del folio abierto para una habitacion especifica"""
+    conexion = conectar()
+    if not conexion: return None
+    try:
+        cur = conexion.cursor()
+        # Buscamos el folio que este ABIERTO para esa habitacion
+        query = """
+            SELECT id_folio FROM folios 
+            WHERE id_habitacion = (SELECT id_habitacion FROM habitaciones WHERE nro_habitacion = %s)
+            AND estado = 'ABIERTO'
+            LIMIT 1
+        """
+        cur.execute(query, (num_hab,))
+        resultado = cur.fetchone()
+        return resultado[0] if resultado else None
+    finally:
+        conexion.close()
