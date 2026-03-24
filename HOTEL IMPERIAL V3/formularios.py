@@ -876,15 +876,24 @@ class VentanaAsignarLimpieza(ctk.CTkToplevel):
             messagebox.showwarning("Atención", "Empleado no válido")
 
 # --- 7. VENTANA DE CARGOS ---
+import customtkinter as ctk
+from tkinter import messagebox
+import logic
+
+
+
 class VentanaCargos(ctk.CTkToplevel):
     def __init__(self, master, num_hab=None, sesion=None):
         super().__init__(master)
         self.master = master
         self.sesion = sesion
         self.title("Registrar Cargo")
-        self.geometry("400x580") # Un poco más alta para el filtro
+        self.geometry("400x650") 
         self.configure(fg_color="black")
         self.grab_set()
+
+        # Variable para cálculos
+        self.precio_unitario = 0.0
 
         ctk.CTkLabel(self, text="NUEVO CARGO", font=("Garamond", 24, "bold"), 
                      text_color="#D4AF37").pack(pady=20)
@@ -914,10 +923,11 @@ class VentanaCargos(ctk.CTkToplevel):
         self.rb_serv.pack(side="left", padx=10)
 
         # 2. Selector de Producto/Servicio
-        self.productos_data = [] # Se llenará dinámicamente
+        self.productos_data = [] 
         self.combo_prod = ctk.CTkComboBox(self, values=["Cargando..."], 
                                           fg_color="#1A1A1A", border_color="#D4AF37",
-                                          button_color="#D4AF37", width=250)
+                                          button_color="#D4AF37", width=250,
+                                          command=self.al_seleccionar_item) 
         self.combo_prod.set("Seleccionar...")
         self.combo_prod.pack(pady=10)
 
@@ -926,53 +936,92 @@ class VentanaCargos(ctk.CTkToplevel):
                                         fg_color="#1A1A1A", border_color="#D4AF37", width=250)
         self.entry_cant.pack(pady=10)
         self.entry_cant.insert(0, "1")
+        self.entry_cant.bind("<KeyRelease>", lambda e: self.calcular_total())
+
+        # --- SECCIÓN DE TOTALES ---
+        self.lbl_precio_u = ctk.CTkLabel(self, text="Precio Unitario: $0", 
+                                         text_color="#D4AF37", font=("Arial", 12))
+        self.lbl_precio_u.pack(pady=2)
+
+        self.lbl_total = ctk.CTkLabel(self, text="TOTAL: $0", 
+                                       text_color="#D4AF37", font=("Garamond", 20, "bold"))
+        self.lbl_total.pack(pady=10)
 
         self.btn_confirmar = ctk.CTkButton(self, text="REGISTRAR", 
                                            fg_color="#D4AF37", text_color="black", 
                                            font=("Arial", 14, "bold"),
                                            command=self.guardar_cargo)
-        self.btn_confirmar.pack(pady=30)
+        self.btn_confirmar.pack(pady=20)
 
-        # Cargar lista inicial
         self.actualizar_lista()
 
     def actualizar_lista(self):
-        """Filtra la lista según lo seleccionado en los RadioButtons"""
         categoria = self.tipo_var.get()
-        # Llamamos a logic enviando el filtro (PRODUCTO o SERVICIO)
-        self.productos_data = logic.obtener_catalogo_filtrado(categoria)
+        self.productos_data = logic.obtener_catalogo_productos(categoria)
         
+        self.precio_unitario = 0.0
+        self.lbl_precio_u.configure(text="Precio Unitario: $0")
+        self.lbl_total.configure(text="TOTAL: $0")
+
         if self.productos_data:
-            nombres = [p[1] for p in self.productos_data]
+            nombres = [str(p[1]) for p in self.productos_data]
             self.combo_prod.configure(values=nombres)
             self.combo_prod.set(f"Seleccionar {categoria.lower()}")
         else:
-            self.combo_prod.configure(values=["Sin items"])
+            self.combo_prod.configure(values=[])
             self.combo_prod.set("Sin items")
 
+    def al_seleccionar_item(self, seleccion):
+        for item in self.productos_data:
+            if str(item[1]) == seleccion:
+                self.precio_unitario = float(item[2])
+                self.lbl_precio_u.configure(text=f"Precio Unitario: ${self.precio_unitario:,.0f}")
+                self.calcular_total()
+                break
+
+    def calcular_total(self):
+        try:
+            cant_val = self.entry_cant.get()
+            cantidad = int(cant_val) if cant_val else 0
+            total = self.precio_unitario * cantidad
+            self.lbl_total.configure(text=f"TOTAL: ${total:,.0f}")
+        except ValueError:
+            self.lbl_total.configure(text="TOTAL: $0")
+
     def guardar_cargo(self):
-        # ... (Tu misma lógica de guardado de antes) ...
-        num_hab = self.entry_hab.get()
+        num_hab_texto = self.entry_hab.get()
         prod_nom = self.combo_prod.get()
         cant_str = self.entry_cant.get()
 
-        if not num_hab or "Seleccionar" in prod_nom or not cant_str:
+        if not num_hab_texto or "Seleccionar" in prod_nom or not cant_str:
             messagebox.showwarning("Atención", "Complete todos los campos")
             return
 
         try:
             cantidad = int(cant_str)
-            id_folio = logic.obtener_folio_activo_por_hab(num_hab)
+            
+            # Buscamos el Folio vinculado (Validación de cuenta)
+            id_folio = logic.obtener_folio_activo_por_hab(num_hab_texto)
             
             if not id_folio:
-                messagebox.showerror("Error", f"No hay folio abierto para hab {num_hab}")
+                messagebox.showerror("Error", f"No hay cuenta activa para la habitación {num_hab_texto}")
                 return
 
-            id_prod = next((p[0] for p in self.productos_data if p[1] == prod_nom), None)
-            id_user = getattr(self.master, 'sesion', {}).get('id_usuario', 1) if self.master else 1
+            # Buscamos el ID real de la habitación para el registro detallado
+            id_hab_db = logic.obtener_id_habitacion_por_numero(num_hab_texto)
+            
+            if not id_hab_db:
+                messagebox.showerror("Error", f"La habitación {num_hab_texto} no existe en la base de datos")
+                return
 
-            if logic.registrar_cargo_a_folio(id_folio, num_hab, id_prod, cantidad, id_user):
-                messagebox.showinfo("Éxito", "Registrado correctamente")
+            # Datos del producto e usuario
+            id_prod = next((p[0] for p in self.productos_data if str(p[1]) == prod_nom), None)
+            id_user = getattr(self.master, 'sesion', {}).get('id_usuario', 1) if self.master else 1
+            precio_u = self.precio_unitario
+
+            # Se envía id_folio para la cuenta y id_hab_db para el detalle del consumo
+            if logic.registrar_cargo_a_folio(id_folio, id_hab_db, id_prod, cantidad, precio_u, id_user):
+                messagebox.showinfo("Éxito", f"Registrado en Hab {num_hab_texto} (Folio #{id_folio})")
                 self.destroy()
         except Exception as e:
             messagebox.showerror("Error", f"Error: {str(e)}")

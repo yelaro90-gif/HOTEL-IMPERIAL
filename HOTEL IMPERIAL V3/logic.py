@@ -476,16 +476,23 @@ def finalizar_limpieza(num_hab):
         conexion.close()
  # --- LÓGICA DE PRODUCTOS Y SERVICIOS ---
 
-def obtener_catalogo_productos():
-    """Trae todos los productos activos para llenar los combos de la interfaz"""
-    conexion = conectar()
-    if not conexion: return []
+def obtener_catalogo_productos(categoria):
+    """Filtra productos o servicios según la categoría"""
     try:
-        cur = conexion.cursor()
-        cur.execute("SELECT id_producto, nombre, precio FROM productos_servicios WHERE estado = 'ACTIVO' ORDER BY nombre ASC")
-        return cur.fetchall()
-    finally:
+        conexion = conectar() 
+        cursor = conexion.cursor()
+
+        sql = "SELECT id_producto, nombre, precio FROM productos_servicios WHERE categoria = %s AND estado = 'ACTIVO'"
+        
+        cursor.execute(sql, (categoria,))
+        resultado = cursor.fetchall()
+        
+        cursor.close()
         conexion.close()
+        return resultado 
+    except Exception as e:
+        print(f"Error en logic: {e}")
+        return []
 
 def registrar_cargo_a_folio(id_folio, num_hab, id_producto, cantidad, id_usuario):
     conexion = conectar()
@@ -516,20 +523,182 @@ def registrar_cargo_a_folio(id_folio, num_hab, id_producto, cantidad, id_usuario
     finally:
         conexion.close()
 def obtener_folio_activo_por_hab(num_hab):
-    """Busca el ID del folio abierto para una habitacion especifica"""
+    """
+    Busca el folio vinculado a la habitación en la tabla 'reservas'.
+    """
     conexion = conectar()
     if not conexion: return None
     try:
         cur = conexion.cursor()
-        # Buscamos el folio que este ABIERTO para esa habitacion
+        
+        # Ajustado: id_folio_vinculado y num_habitacion
         query = """
-            SELECT id_folio FROM folios 
-            WHERE id_habitacion = (SELECT id_habitacion FROM habitaciones WHERE nro_habitacion = %s)
-            AND estado = 'ABIERTO'
+            SELECT r.id_folio_vinculado 
+            FROM reservas r
+            JOIN folios f ON r.id_folio_vinculado = f.id_folio
+            WHERE CAST(r.num_habitacion AS TEXT) = %s 
+            AND r.estado_reserva ILIKE 'CHECK-IN'
+            AND f.estado ILIKE 'ABIERTO'
             LIMIT 1
         """
-        cur.execute(query, (num_hab,))
+        
+        cur.execute(query, (str(num_hab).strip(),))
         resultado = cur.fetchone()
+        
+        # Retorna el ID del folio si lo encuentra, de lo contrario None
         return resultado[0] if resultado else None
+            
+    except Exception as e:
+        print(f"Error en la lógica de folio (vinculado): {e}")
+        return None
     finally:
         conexion.close()
+def obtener_items_por_categoria(categoria):
+    """
+    Filtra los productos o servicios segun la columna 'categoria' de tu tabla.
+    """
+    try:
+        # Usamos tu funcion conectar() que ya detecto el editor
+        conexion = conectar() 
+        cursor = conexion.cursor()
+
+        # Asegurate de que esta linea sea exacta
+        sql = "SELECT id_producto, nombre, precio FROM productos_servicios WHERE categoria = %s AND estado = 'ACTIVO'"
+        
+        # El (categoria,) con coma al final es muy importante en PostgreSQL/Python
+        cursor.execute(sql, (categoria,))
+        resultado = cursor.fetchall()
+        
+        # Cerramos para no dejar conexiones abiertas
+        cursor.close()
+        conexion.close()
+        
+        return resultado 
+    except Exception as e:
+        print(f"Error al obtener items: {e}")
+        return []
+def obtener_folio_activo_por_hab(num_hab):
+    """
+    Busca el folio asociado a una habitación en la tabla 'reservas' 
+    usando los nombres de columna reales.
+    """
+    try:
+        conexion = conectar()
+        cursor = conexion.cursor()
+        
+        # Columnas reales verificadas en image_002f83.png:
+        # - habitacion
+        # - id_folio_vinculado
+        # - estado
+        sql = """SELECT id_folio_vinculado FROM reservas 
+                 WHERE CAST(habitacion AS TEXT) = %s 
+                 AND estado ILIKE 'OCUPADA'"""
+        
+        # Nota: He cambiado 'CHECK-IN' por 'OCUPADA' porque es el estado 
+        # que disparas al ocupar la habitación en tu sistema.
+        
+        cursor.execute(sql, (str(num_hab).strip(),))
+        resultado = cursor.fetchone()
+        
+        cursor.close()
+        conexion.close()
+        
+        return resultado[0] if resultado else None
+    except Exception as e:
+        print(f"Error en logic (puente reservas-folios): {e}")
+        return None
+def registrar_cargo_a_folio(id_folio, num_hab, id_prod, cantidad, id_usuario):
+    try:
+        conexion = conectar()
+        cursor = conexion.cursor()
+        # Insertamos el consumo
+        sql = """INSERT INTO detalles_folios (id_folio, id_producto, cantidad, id_usuario, fecha_cargo) 
+                 VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)"""
+        cursor.execute(sql, (id_folio, id_prod, cantidad, id_usuario))
+        conexion.commit()
+        cursor.close()
+        conexion.close()
+        return True
+    except Exception as e:
+        print(f"Error registrando cargo: {e}")
+        return False    
+    
+def obtener_id_habitacion_por_numero(nro):
+    """Convierte el número de habitación (ej: '101') en su ID real"""
+    try:
+        conexion = conectar()
+        cursor = conexion.cursor()
+        # Buscamos el ID usando el número de la habitación
+        cursor.execute("SELECT id_habitacion FROM habitaciones WHERE CAST(nro_habitacion AS TEXT) = %s", (str(nro).strip(),))
+        res = cursor.fetchone()
+        cursor.close()
+        conexion.close()
+        return res[0] if res else None
+    except Exception as e:
+        print(f"Error obteniendo ID de habitación: {e}")
+        return None
+
+def obtener_folio_activo_por_hab(num_hab):
+    """Busca el folio vinculado en la tabla reservas usando columnas reales"""
+    try:
+        conexion = conectar()
+        cursor = conexion.cursor()
+        # Columnas verificadas: habitacion, id_folio_vinculado, estado
+        sql = """SELECT id_folio_vinculado FROM reservas 
+                 WHERE CAST(habitacion AS TEXT) = %s 
+                 AND estado ILIKE 'OCUPADA'"""
+        cursor.execute(sql, (str(num_hab).strip(),))
+        resultado = cursor.fetchone()
+        cursor.close()
+        conexion.close()
+        return resultado[0] if resultado else None
+    except Exception as e:
+        print(f"Error buscando folio: {e}")
+        return None
+
+def registrar_cargo_a_folio(id_folio, id_hab_db, id_prod, cantidad, precio_u, id_user):
+    """Recibe los 6 argumentos necesarios para el detalle del cargo"""
+    try:
+        conexion = conectar()
+        cursor = conexion.cursor()
+        subtotal = cantidad * precio_u
+        
+        # Columnas según tu tabla detalles_folio
+        sql = """INSERT INTO detalles_folio 
+                 (id_folio, id_habitacion, id_producto, cantidad, precio_unitario, subtotal, fecha_cargo, id_usuario) 
+                 VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s)"""
+        
+        cursor.execute(sql, (id_folio, id_hab_db, id_prod, cantidad, precio_u, subtotal, id_user))
+        conexion.commit()
+        cursor.close()
+        conexion.close()
+        return True
+    except Exception as e:
+        print(f"Error en inserción: {e}")
+        return False
+
+def obtener_folio_activo_por_hab(num_hab):
+    """
+    Busca el folio vinculado en la tabla reservas.
+    Columnas reales según image_002f83.png: habitacion, id_folio_vinculado, estado.
+    """
+    try:
+        conexion = conectar()
+        cursor = conexion.cursor()
+        
+        # Usamos los nombres exactos de tu tabla 'reservas'
+        sql = """SELECT id_folio_vinculado FROM reservas 
+                 WHERE CAST(habitacion AS TEXT) = %s 
+                 AND estado ILIKE 'OCUPADA'"""
+        
+        cursor.execute(sql, (str(num_hab).strip(),))
+        resultado = cursor.fetchone()
+        
+        cursor.close()
+        conexion.close()
+        
+        return resultado[0] if resultado else None
+    except Exception as e:
+        print(f"Error en logic (puente reservas-folios): {e}")
+        return None
+    
