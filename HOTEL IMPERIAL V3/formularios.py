@@ -406,7 +406,7 @@ class VentanaDetalleHuesped(ctk.CTkToplevel):
         self.master = master
         self.num_hab = num_hab
         self.title(f"Detalle Ocupación - Hab {self.num_hab}")
-        self.geometry("550x730") 
+        self.geometry("550x780") # Aumenté un poquito el alto para el nuevo botón
         self.configure(fg_color="black")
         self.grab_set()
 
@@ -454,14 +454,23 @@ class VentanaDetalleHuesped(ctk.CTkToplevel):
         self.btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.btn_frame.pack(pady=(5, 10), padx=30, fill="x")
 
-        # BOTÓN NUEVO: REGISTRAR CARGO
+        # BOTÓN: REGISTRAR CARGO
         self.btn_cargo = ctk.CTkButton(self.btn_frame, text="＋ REGISTRAR CONSUMO / CARGO", 
                                        fg_color="transparent", border_color="#D4AF37", 
                                        border_width=1, text_color="#D4AF37",
                                        hover_color="#1A1A1A",
                                        font=("Arial", 13, "bold"), height=40,
-                                       command=self.abrir_ventana_cargos) # <--- Aquí se vincula
+                                       command=self.abrir_ventana_cargos)
         self.btn_cargo.pack(pady=4, fill="x")
+
+        # --- BOTÓN NUEVO: VER ESTADO DE CUENTA (DataGridView) ---
+        self.btn_ver_cuenta = ctk.CTkButton(self.btn_frame, text="👁 VER ESTADO DE CUENTA / CONSUMOS", 
+                                            fg_color="transparent", border_color="#D4AF37", 
+                                            border_width=1, text_color="white",
+                                            hover_color="#1A1A1A",
+                                            font=("Arial", 13, "bold"), height=40,
+                                            command=self.abrir_estado_cuenta) # <--- Nueva función
+        self.btn_ver_cuenta.pack(pady=4, fill="x")
 
         self.btn_checkout = ctk.CTkButton(self.btn_frame, text="SOLO SALIDA HABITACIÓN ✓", 
                                           fg_color="#D4AF37", text_color="black",
@@ -482,10 +491,13 @@ class VentanaDetalleHuesped(ctk.CTkToplevel):
         ctk.CTkLabel(f, text=label_text, font=("Arial", 11, "bold"), text_color="#D4AF37").pack(side="left")
         ctk.CTkLabel(f, text=str(value_text), font=("Arial", 13, "bold"), text_color=color_valor).pack(side="right")
     
-    # ESTA ES LA FUNCIÓN QUE FALTABA Y POR ESO SALÍA SUBRAYADO:
     def abrir_ventana_cargos(self):
-        """Abre la ventana de cargos"""
         VentanaCargos(self.master, num_hab=self.num_hab, sesion=getattr(self.master, 'sesion', None))
+
+    # NUEVA FUNCIÓN PARA EL BOTÓN AGREGADO:
+    def abrir_estado_cuenta(self):
+        """Abre la ventana de la tabla de consumos"""
+        VentanaEstadoCuenta(self.master, self.num_hab)
 
     def finalizar_estancia(self):
         if messagebox.askyesno("Confirmar", f"¿Desea liberar solo la habitación {self.num_hab}?"):
@@ -1144,3 +1156,86 @@ class VentanaRegistroTerceros(ctk.CTkToplevel):
                 self.destroy()
         else:
             messagebox.showerror("Error", "No se pudo guardar. Revise la consola.")
+import tkinter as tk
+from tkinter import ttk
+import customtkinter as ctk
+import logic
+
+class VentanaEstadoCuenta(ctk.CTkToplevel):
+    def __init__(self, master, num_hab):
+        super().__init__(master)
+        self.title(f"Estado de Cuenta - Habitación {num_hab}")
+        self.geometry("700x450")
+        self.configure(fg_color="black")
+        self.grab_set()
+
+        # Título estilo elegante
+        ctk.CTkLabel(self, text=f"DETALLE DE CONSUMOS - HAB {num_hab}", 
+                     font=("Garamond", 20, "bold"), text_color="#D4AF37").pack(pady=15)
+
+        # Contenedor para el "DataGridView"
+        self.frame_tabla = ctk.CTkFrame(self, fg_color="#1A1A1A")
+        self.frame_tabla.pack(fill="both", expand=True, padx=20, pady=10)
+
+        # Configuración del estilo de la tabla (Para que se vea moderna)
+        style = ttk.Style()
+        style.theme_use("default")
+        style.configure("Treeview", 
+                        background="#1A1A1A", 
+                        foreground="white", 
+                        fieldbackground="#1A1A1A",
+                        rowheight=25)
+        style.map("Treeview", background=[('selected', '#D4AF37')], foreground=[('selected', 'black')])
+
+        # El Treeview (Nuestro DataGridView)
+        columnas = ("Hab", "Producto/Servicio", "Cant.", "Precio U.", "Subtotal", "Fecha")
+        self.tabla = ttk.Treeview(self.frame_tabla, columns=columnas, show="headings")
+
+        # Definir encabezados
+        for col in columnas:
+            self.tabla.heading(col, text=col)
+            self.tabla.column(col, width=100, anchor="center")
+
+        # Ajustar ancho especial para producto
+        self.tabla.column("Producto/Servicio", width=180)
+
+        self.tabla.pack(fill="both", expand=True)
+
+        # Scrollbar (Como en VB)
+        scroll = ttk.Scrollbar(self.tabla, orient="vertical", command=self.tabla.yview)
+        self.tabla.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+
+        # Label para el Total
+        self.lbl_total = ctk.CTkLabel(self, text="TOTAL A PAGAR: $0", 
+                                       font=("Garamond", 18, "bold"), text_color="#D4AF37")
+        self.lbl_total.pack(pady=15)
+
+        # Cargar los datos al abrir
+        self.cargar_datos(num_hab)
+
+    def cargar_datos(self, num_hab):
+        # 1. Obtener el folio
+        id_folio = logic.obtener_folio_activo_por_hab(num_hab)
+        
+        if not id_folio:
+            self.lbl_total.configure(text="SIN FOLIO ACTIVO")
+            return
+
+        # 2. Traer consumos desde logic.py
+        consumos = logic.obtener_consumos_por_folio(id_folio)
+        
+        total = 0
+        # Limpiar tabla por si acaso
+        for item in self.tabla.get_children():
+            self.tabla.delete(item)
+
+        # 3. Llenar el "DataGridView"
+        for c in consumos:
+            # hab, prod, cant, precio, sub, fecha
+            # Formateamos el precio para que se vea como moneda
+            sub_formateado = f"${c[4]:,.0f}"
+            self.tabla.insert("", "end", values=(c[0], c[1], c[2], f"${c[3]:,.0f}", sub_formateado, c[5].strftime("%d/%m %H:%M")))
+            total += c[4]
+
+        self.lbl_total.configure(text=f"TOTAL A PAGAR: ${total:,.0f}")

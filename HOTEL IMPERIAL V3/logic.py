@@ -701,4 +701,40 @@ def obtener_folio_activo_por_hab(num_hab):
     except Exception as e:
         print(f"Error en logic (puente reservas-folios): {e}")
         return None
-    
+def obtener_consumos_por_folio(id_folio):
+    """
+    Trae los consumos usando nombres de columna verificados:
+    - Tabla productos_servicios: usa 'nombre'
+    - Tabla detalles_folio: usa 'fecha_cargo' y 'subtotal'
+    """
+    try:
+        conexion = conectar()
+        cursor = conexion.cursor()
+        
+        # SQL CORREGIDO:
+        # ps.nombre (en lugar de nombre_producto)
+        # h.nro_habitacion
+        sql = """
+            SELECT 
+                h.nro_habitacion, 
+                ps.nombre, 
+                df.cantidad, 
+                df.precio_unitario, 
+                df.subtotal,
+                df.fecha_cargo
+            FROM detalles_folio df
+            INNER JOIN habitaciones h ON df.id_habitacion = h.id_habitacion
+            INNER JOIN productos_servicios ps ON df.id_producto = ps.id_producto
+            WHERE df.id_folio = %s
+            ORDER BY df.fecha_cargo DESC
+        """
+        
+        cursor.execute(sql, (id_folio,))
+        filas = cursor.fetchall()
+        
+        cursor.close()
+        conexion.close()
+        return filas
+    except Exception as e:
+        print(f"Error en SQL de consumos: {e}")
+        return []
